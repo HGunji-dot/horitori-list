@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>出荷リスト ジェネレーター</title>
+<style>
+  :root{
+    --line:#d7dde4;
+    --head:#1f5fa8;
+    --blank:#fff6da;     /* 品番なし行の薄い色（画面のみ） */
+    --blank-line:#f0e2a8;
+  }
+  *{box-sizing:border-box;}
+  body{
+    font-family:"Yu Gothic","Hiragino Kaku Gothic ProN",Meiryo,sans-serif;
+    margin:0; color:#222; background:#eef2f6;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:880px; margin:0 auto; padding:20px 16px 60px;}
+  h1{font-size:20px; margin:8px 0 16px; display:flex; align-items:center; gap:8px;}
+  h1 .leaf{font-size:22px;}
+
+  .panel{background:#fff; border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:16px;}
+  label.fld{display:block; font-size:13px; font-weight:700; color:#445; margin:0 0 6px;}
+  .row1{display:flex; align-items:flex-end; gap:16px; flex-wrap:wrap;}
+  input[type=date]{font-size:15px; padding:7px 10px; border:1px solid #b9c2cc; border-radius:7px;}
+  textarea{
+    width:100%; min-height:150px; resize:vertical; margin-top:4px;
+    font-family:"Yu Gothic",Consolas,monospace; font-size:13px; line-height:1.6;
+    padding:10px 12px; border:1px solid #b9c2cc; border-radius:8px; white-space:pre;
+  }
+  .hint{font-size:12px; color:#7a8794; margin:6px 2px 0;}
+
+  .btn{
+    font-size:15px; font-weight:700; padding:9px 20px; border-radius:8px; cursor:pointer;
+    border:1px solid transparent;
+  }
+  .btn-primary{background:var(--head); color:#fff;}
+  .btn-primary:hover{background:#19508d;}
+  .btn-print{background:#fff; color:var(--head); border-color:var(--head);}
+  .btn-print:hover{background:#eef5ff;}
+  .actions{display:flex; justify-content:flex-end; margin-top:12px;}
+
+  details.drop{margin-top:14px; border-top:1px dashed var(--line); padding-top:12px;}
+  details.drop summary{cursor:pointer; font-size:13px; font-weight:700; color:#445;}
+  details.drop textarea{min-height:90px; font-size:13px; margin-top:10px;}
+  .drop-actions{display:flex; gap:8px; margin-top:8px;}
+  .btn-sm{font-size:12px; padding:5px 12px; border-radius:6px; cursor:pointer; border:1px solid #b9c2cc; background:#fff;}
+
+  /* ---- 結果 ---- */
+  .result-head{display:flex; align-items:baseline; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:10px;}
+  .result-title{font-size:20px; font-weight:800;}
+  .result-title .date{color:var(--head); margin-left:8px;}
+  .result-count{font-size:13px; color:#667;}
+
+  table.list{width:100%; border-collapse:collapse; font-size:15px;}
+  table.list th, table.list td{border:1px solid var(--line); padding:9px 12px; text-align:left;}
+  table.list th{background:var(--head); color:#fff; font-weight:700; font-size:14px;}
+  table.list td.chk{width:48px; text-align:center;}
+  table.list td.hin{width:130px; white-space:nowrap; font-family:Consolas,monospace; color:#334;}
+  .chkbox{display:inline-block; width:16px; height:16px; border:2px solid #555; border-radius:3px; vertical-align:middle;}
+  tr.blank{background:var(--blank);}
+  tr.blank td{border-color:var(--blank-line);}
+
+  .empty-note{color:#8a96a2; font-size:14px; padding:24px 4px; text-align:center;}
+
+  /* ---- 印刷 ---- */
+  @media print{
+    @page{size:A4 portrait; margin:15mm;}
+    body{background:#fff;}
+    .wrap{max-width:none; padding:0;}
+    .no-print{display:none !important;}
+    h1{display:none;}
+    .panel.result{border:none; padding:0; margin:0;}
+    .result-title{font-size:18px;}
+    table.list{font-size:12pt;}
+    /* インク節約：塗りつぶしは一切印刷しない（白地＋枠線＋黒文字のみ） */
+    table.list th{background:#fff !important; color:#000 !important; font-weight:700;}
+    table.list th, table.list td{border:1px solid #555; padding:7px 9px;}
+    tr{break-inside:avoid;}
+    tr.blank{background:#fff !important;}        /* 品番なしの黄色は紙に出さない */
+    tr.blank td{border-color:#555 !important;}
+    thead{display:table-header-group;}           /* 改ページ時に見出しを各ページへ */
+    .chkbox{border-color:#000;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1 class="no-print"><span class="leaf">🌳</span>出荷リスト ジェネレーター</h1>
+
+  <!-- 入力パネル -->
+  <div class="panel no-print">
+    <div class="row1">
+      <div>
+        <label class="fld" for="date">出荷日</label>
+        <input type="date" id="date">
+      </div>
+    </div>
+
+    <div style="margin-top:14px;">
+      <label class="fld" for="src">表をここに貼り付け（Excel・サイトからコピー）</label>
+      <textarea id="src" placeholder="例）
+【山採り】オトコヨウゾメ 高さ1.8m dota4-18 【送料無料】不在置き了承商品
+cfjg20-17 フェイジョア ※品種無し 高さ1.7m　不在置き了承
+オスマンサス「バークウッディ」大 高さ70cm"></textarea>
+      <p class="hint">複数列の表でも貼り付けOK。商品名らしい列を自動判定して、各行を「樹木名・品番」に変換します。</p>
+    </div>
+
+    <details class="drop">
+      <summary>捨てるリスト（タグ・定型句）— 1行に1つ</summary>
+      <textarea id="drop" spellcheck="false"></textarea>
+      <div class="drop-actions">
+        <button class="btn-sm" id="dropSave">保存</button>
+        <button class="btn-sm" id="dropReset">既定に戻す</button>
+        <span class="hint" id="dropMsg" style="align-self:center;"></span>
+      </div>
+    </details>
+
+    <div class="actions">
+      <button class="btn btn-primary" id="run">変換する ▶</button>
+    </div>
+  </div>
+
+  <!-- 結果パネル -->
+  <div class="panel result" id="resultPanel" style="display:none;">
+    <div class="result-head">
+      <div class="result-title">出荷リスト<span class="date" id="outDate"></span></div>
+      <div style="display:flex; align-items:center; gap:14px;">
+        <span class="result-count" id="outCount"></span>
+        <button class="btn btn-print no-print" id="print">🖨 印刷する</button>
+      </div>
+    </div>
+    <table class="list">
+      <thead>
+        <tr><th class="chk">済</th><th>樹木名</th><th class="hin">品番</th></tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+/* ====== 既定の捨てるリスト ====== */
+const DEFAULT_DROP = [
+  "送料無料",
+  "不在置き了承商品",
+  "不在置き了承",
+  "代引不可",
+  "代引き不可",
+  "日時指定不可",
+  "時間指定不可",
+  "同梱不可",
+  "北海道・沖縄別途",
+  "北海道沖縄別途",
+  "離島別途",
+  "程度"
+];
+
+/* ====== 抽出ルール ====== */
+const HINBAN_RE = /[A-Za-z]+\d+-\d+(?:\s*[■□▪▫◆◇◈●○◎◯★☆▲△▼▽]+)?/;   // 品番：英字+数字+ハイフン+数字（＋末尾の記号■◎等があれば含める）
+const HEIGHT_RE = /(?:高さ|樹高|H|約)?\s*\d+(?:\.\d+)?\s*(?:cm|mm|㎝|ｍ|m)/gi; // 高さ表記
+
+function getDropList(){
+  const raw = localStorage.getItem("dropList");
+  if(raw){ try{ return JSON.parse(raw); }catch(e){} }
+  return DEFAULT_DROP.slice();
+}
+
+/* 1セルの商品名から 樹木名・品番 を取り出す */
+function extract(cell, dropList){
+  let s = " " + cell + " ";
+
+  // 1) 品番を抜く（位置に関係なく先頭1件）
+  const m = s.match(HINBAN_RE);
+  const hinban = m ? m[0].replace(/\s+/g, "") : "";   // 記号の前に空白があれば詰めて結合
+  if(m) s = s.replace(m[0], " ");
+
+  // 2) 高さを消す
+  s = s.replace(HEIGHT_RE, " ");
+
+  // 3) 捨てるリスト（長い語句から先に消す）
+  const sorted = dropList.filter(Boolean).slice().sort((a,b)=>b.length-a.length);
+  for(const w of sorted){ s = s.split(w).join(" "); }
+
+  // 4) ※ から後ろを削除
+  s = s.replace(/※.*$/, " ");
+
+  // 5) 中身が消えて空になった 【】「」() を除去
+  s = s.replace(/【\s*】|「\s*」|（\s*）|\(\s*\)/g, " ");
+
+  // 6) 整形（全角・半角スペースを1つに、前後トリム）
+  s = s.replace(/[　\s]+/g, " ").trim();
+
+  return { name:s, hinban };
+}
+
+/* 複数列のとき、商品名の列を推定 */
+function detectProductCol(rows){
+  const cols = Math.max(...rows.map(r=>r.length));
+  let best=0, bestScore=-Infinity;
+  for(let c=0;c<cols;c++){
+    let score=0;
+    for(const r of rows){
+      const cell = (r[c]||"");
+      if(HINBAN_RE.test(cell)) score+=3;
+      if(/[぀-ヿ一-鿿]/.test(cell)) score+=1;   // 日本語を含む
+      if(cell.includes("【")||cell.includes("高さ")) score+=1;
+      score += Math.min(cell.length,40)/40;
+    }
+    if(score>bestScore){ bestScore=score; best=c; }
+  }
+  return best;
+}
+
+function looksLikeHeader(cell){
+  const t = cell.trim();
+  return ["商品名","品名","商品","アイテム","name","item"].includes(t.toLowerCase()) ||
+         ["商品名","品名","商品","アイテム"].includes(t);
+}
+
+function fmtDate(v){
+  if(!v) return "";
+  const p = v.split("-");
+  if(p.length!==3) return v;
+  return `${p[0]}年${Number(p[1])}月${Number(p[2])}日`;
+}
+
+/* ====== メイン処理 ====== */
+function generate(){
+  const text = document.getElementById("src").value;
+  const dateV = document.getElementById("date").value;
+  const dropList = getDropList();
+
+  const lines = text.split(/\r?\n/).filter(l => l.trim().length>0);
+  const panel = document.getElementById("resultPanel");
+
+  if(lines.length===0){ panel.style.display="none"; return; }
+
+  const rows = lines.map(l => l.split("\t"));
+  const hasTab = rows.some(r => r.length>1);
+  const col = hasTab ? detectProductCol(rows) : 0;
+
+  let items = [];
+  for(const r of rows){
+    const cell = hasTab ? (r[col]||"") : r[0];
+    if(looksLikeHeader(cell)) continue;       // 見出し行はスキップ
+    const { name, hinban } = extract(cell, dropList);
+    if(!name && !hinban) continue;            // 完全に空なら捨てる
+    items.push({ name, hinban });
+  }
+
+  // 品番の英字でグループ化して並べる（同じ英字を隣接）。同英字内は樹木名→品番。品番なしは末尾
+  items.sort((a,b)=>{
+    const aBlank=!a.hinban, bBlank=!b.hinban;
+    if(aBlank!==bBlank) return aBlank?1:-1;
+    if(aBlank&&bBlank)  return a.name.localeCompare(b.name,"ja");
+    const ka=a.hinban.match(/^[A-Za-z]+/)[0];
+    const kb=b.hinban.match(/^[A-Za-z]+/)[0];
+    if(ka!==kb) return ka.localeCompare(kb);
+    const n=a.name.localeCompare(b.name,"ja");
+    if(n!==0) return n;
+    return a.hinban.localeCompare(b.hinban, undefined, {numeric:true});
+  });
+
+  // 描画
+  const tbody = document.getElementById("tbody");
+  tbody.innerHTML = "";
+  let blank=0;
+  for(const it of items){
+    const tr = document.createElement("tr");
+    if(!it.hinban){ tr.className="blank"; blank++; }
+    tr.innerHTML =
+      `<td class="chk"><span class="chkbox"></span></td>`+
+      `<td>${escapeHtml(it.name)}</td>`+
+      `<td class="hin">${escapeHtml(it.hinban)}</td>`;   // 品番なしは完全な空欄
+    tbody.appendChild(tr);
+  }
+
+  document.getElementById("outDate").textContent = dateV ? "　"+fmtDate(dateV) : "";
+  document.getElementById("outCount").textContent =
+    `全 ${items.length} 件` + (blank? `（うち品番なし ${blank} 件）` : "");
+  panel.style.display = items.length ? "block" : "none";
+}
+
+function escapeHtml(s){
+  return (s||"").replace(/[&<>"']/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+}
+
+/* ====== 起動・イベント ====== */
+window.addEventListener("DOMContentLoaded", ()=>{
+  // 出荷日の初期値＝翌日
+  const t = new Date();
+  t.setDate(t.getDate() + 1);
+  const pad = n=>String(n).padStart(2,"0");
+  document.getElementById("date").value = `${t.getFullYear()}-${pad(t.getMonth()+1)}-${pad(t.getDate())}`;
+
+  // 捨てるリストの初期表示
+  document.getElementById("drop").value = getDropList().join("\n");
+
+  document.getElementById("run").addEventListener("click", generate);
+  document.getElementById("date").addEventListener("change", ()=>{
+    if(document.getElementById("resultPanel").style.display!=="none") generate();
+  });
+  document.getElementById("print").addEventListener("click", ()=> window.print());
+
+  // 捨てるリスト 保存／リセット
+  document.getElementById("dropSave").addEventListener("click", ()=>{
+    const list = document.getElementById("drop").value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+    localStorage.setItem("dropList", JSON.stringify(list));
+    flash("保存しました");
+    if(document.getElementById("resultPanel").style.display!=="none") generate();
+  });
+  document.getElementById("dropReset").addEventListener("click", ()=>{
+    localStorage.removeItem("dropList");
+    document.getElementById("drop").value = DEFAULT_DROP.join("\n");
+    flash("既定に戻しました");
+    if(document.getElementById("resultPanel").style.display!=="none") generate();
+  });
+});
+
+function flash(msg){
+  const el = document.getElementById("dropMsg");
+  el.textContent = msg;
+  setTimeout(()=>{ el.textContent=""; }, 2000);
+}
+</script>
+</body>
+</html>
