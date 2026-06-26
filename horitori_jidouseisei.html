@@ -63,6 +63,12 @@
   tr.blank{background:var(--blank);}
   tr.blank td{border-color:var(--blank-line);}
 
+  /* ---- 除外（画面専用・印刷しない） ---- */
+  th.exc, td.exc{width:44px; text-align:center;}
+  td.exc input{width:16px; height:16px; cursor:pointer; margin:0;}
+  tr.excluded td{opacity:.45; text-decoration:line-through;}
+  tr.excluded td.exc{opacity:1; text-decoration:none;}   /* チェック欄は薄くしない */
+
   .empty-note{color:#8a96a2; font-size:14px; padding:24px 4px; text-align:center;}
 
   /* ---- 印刷 ---- */
@@ -81,6 +87,7 @@
     tr{break-inside:avoid;}
     tr.blank{background:#fff !important;}        /* 品番なしの黄色は紙に出さない */
     tr.blank td{border-color:#555 !important;}
+    tr.excluded{display:none !important;}        /* 除外した行は紙に出さない */
     thead{display:table-header-group;}           /* 改ページ時に見出しを各ページへ */
     .chkbox{border-color:#000;}
   }
@@ -135,7 +142,7 @@ cfjg20-17 フェイジョア ※品種無し 高さ1.7m　不在置き了承
     </div>
     <table class="list">
       <thead>
-        <tr><th class="chk">済</th><th>樹木名</th><th class="hin">品番</th></tr>
+        <tr><th class="exc no-print">除外</th><th class="chk">済</th><th>樹木名</th><th class="hin">品番</th></tr>
       </thead>
       <tbody id="tbody"></tbody>
     </table>
@@ -274,6 +281,7 @@ function generate(){
     const tr = document.createElement("tr");
     if(!it.hinban){ tr.className="blank"; blank++; }
     tr.innerHTML =
+      `<td class="exc no-print"><input type="checkbox" class="exbox" title="掘り子に渡さない（印刷から除外）"></td>`+
       `<td class="chk"><span class="chkbox"></span></td>`+
       `<td>${escapeHtml(it.name)}</td>`+
       `<td class="hin">${escapeHtml(it.hinban)}</td>`;   // 品番なしは完全な空欄
@@ -281,9 +289,23 @@ function generate(){
   }
 
   document.getElementById("outDate").textContent = dateV ? "　"+fmtDate(dateV) : "";
-  document.getElementById("outCount").textContent =
-    `全 ${items.length} 件` + (blank? `（うち品番なし ${blank} 件）` : "");
+  updateCount();
   panel.style.display = items.length ? "block" : "none";
+}
+
+/* 件数表示を更新（除外チェックに連動） */
+function updateCount(){
+  const rows = document.querySelectorAll("#tbody tr");
+  const total = rows.length;
+  let blank=0, excluded=0;
+  rows.forEach(tr=>{
+    if(tr.classList.contains("blank")) blank++;
+    if(tr.classList.contains("excluded")) excluded++;
+  });
+  let txt = `全 ${total} 件`;
+  if(blank)    txt += `（うち品番なし ${blank} 件）`;
+  if(excluded) txt += `　除外 ${excluded} 件 → 印刷 ${total - excluded} 件`;
+  document.getElementById("outCount").textContent = txt;
 }
 
 function escapeHtml(s){
@@ -302,10 +324,20 @@ window.addEventListener("DOMContentLoaded", ()=>{
   document.getElementById("drop").value = getDropList().join("\n");
 
   document.getElementById("run").addEventListener("click", generate);
+  // 出荷日変更：表は作り直さず（＝除外チェックを保持）、日付ラベルだけ更新
   document.getElementById("date").addEventListener("change", ()=>{
-    if(document.getElementById("resultPanel").style.display!=="none") generate();
+    const v = document.getElementById("date").value;
+    document.getElementById("outDate").textContent = v ? "　"+fmtDate(v) : "";
   });
   document.getElementById("print").addEventListener("click", ()=> window.print());
+
+  // 除外チェック（イベント委譲：tbody は作り直しても要素自体は残るので一度だけ登録）
+  document.getElementById("tbody").addEventListener("change", (e)=>{
+    if(!e.target.classList.contains("exbox")) return;
+    const tr = e.target.closest("tr");
+    tr.classList.toggle("excluded", e.target.checked);
+    updateCount();
+  });
 
   // 捨てるリスト 保存／リセット
   document.getElementById("dropSave").addEventListener("click", ()=>{
