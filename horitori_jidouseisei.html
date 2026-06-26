@@ -69,6 +69,16 @@
   tr.excluded td{opacity:.45; text-decoration:line-through;}
   tr.excluded td.exc{opacity:1; text-decoration:none;}   /* チェック欄は薄くしない */
 
+  /* ---- 確認ハイライト（画面専用・印刷しない） ---- */
+  th.cfm, td.cfm{width:44px; text-align:center;}
+  td.cfm input{width:16px; height:16px; cursor:pointer; margin:0;}
+  tr.confirmed{background:#e3f6e6;}             /* 確認済み＝薄緑 */
+  tr.confirmed td{border-color:#bfe3c6;}
+  tr.confirmed td.cfm{opacity:1;}
+
+  /* ---- メモ（手書き欄・印刷あり） ---- */
+  th.memo, td.memo{width:100px;}
+
   .empty-note{color:#8a96a2; font-size:14px; padding:24px 4px; text-align:center;}
 
   /* ---- 印刷 ---- */
@@ -88,6 +98,9 @@
     tr.blank{background:#fff !important;}        /* 品番なしの黄色は紙に出さない */
     tr.blank td{border-color:#555 !important;}
     tr.excluded{display:none !important;}        /* 除外した行は紙に出さない */
+    tr.confirmed{background:#fff !important;}    /* 確認の緑は紙に出さない */
+    tr.confirmed td{border-color:#555 !important;}
+    th.memo, td.memo{width:100px;}              /* 手書き用メモ欄は印刷する */
     thead{display:table-header-group;}           /* 改ページ時に見出しを各ページへ */
     .chkbox{border-color:#000;}
   }
@@ -142,7 +155,7 @@ cfjg20-17 フェイジョア ※品種無し 高さ1.7m　不在置き了承
     </div>
     <table class="list">
       <thead>
-        <tr><th class="exc no-print">除外</th><th class="chk">済</th><th>樹木名</th><th class="hin">品番</th></tr>
+        <tr><th class="exc no-print">除外</th><th class="chk">済</th><th>樹木名</th><th class="hin">品番</th><th class="memo">メモ</th><th class="cfm no-print">確認</th></tr>
       </thead>
       <tbody id="tbody"></tbody>
     </table>
@@ -284,7 +297,9 @@ function generate(){
       `<td class="exc no-print"><input type="checkbox" class="exbox" title="掘り子に渡さない（印刷から除外）"></td>`+
       `<td class="chk"><span class="chkbox"></span></td>`+
       `<td>${escapeHtml(it.name)}</td>`+
-      `<td class="hin">${escapeHtml(it.hinban)}</td>`;   // 品番なしは完全な空欄
+      `<td class="hin">${escapeHtml(it.hinban)}</td>`+   // 品番なしは完全な空欄
+      `<td class="memo"></td>`+                          // 手書き用（印刷される空欄）
+      `<td class="cfm no-print"><input type="checkbox" class="cfmbox" title="確認した行をハイライト（画面のみ）"></td>`;
     tbody.appendChild(tr);
   }
 
@@ -331,12 +346,16 @@ window.addEventListener("DOMContentLoaded", ()=>{
   });
   document.getElementById("print").addEventListener("click", ()=> window.print());
 
-  // 除外チェック（イベント委譲：tbody は作り直しても要素自体は残るので一度だけ登録）
+  // 除外／確認チェック（イベント委譲：tbody は作り直しても要素自体は残るので一度だけ登録）
   document.getElementById("tbody").addEventListener("change", (e)=>{
-    if(!e.target.classList.contains("exbox")) return;
     const tr = e.target.closest("tr");
-    tr.classList.toggle("excluded", e.target.checked);
-    updateCount();
+    if(!tr) return;
+    if(e.target.classList.contains("exbox")){
+      tr.classList.toggle("excluded", e.target.checked);
+      updateCount();
+    } else if(e.target.classList.contains("cfmbox")){
+      tr.classList.toggle("confirmed", e.target.checked);   // 画面ハイライトのみ
+    }
   });
 
   // 捨てるリスト 保存／リセット
